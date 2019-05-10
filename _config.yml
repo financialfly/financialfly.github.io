@@ -1,13 +1,13 @@
 # Site settings
 title: Fly
-SEOTitle: financialfly's blog
+SEOTitle: financial's blog
 header-img: img/post-bg-desk.jpg
 email: financialfly@qq.com
 description: "Every failure is leading towards success."
-keyword: "Fly, financialfly, iOS, Apple, iPhone"
+keyword: "Fly, financial, iOS, Apple, iPhone"
 url: "http://financialfly.github.io"          # your host, for absolute URL
 baseurl: ""      # for example, '/blog' if your blog hosted on 'host/blog'
-github_repo: "https://github.com/qiubaiying/qiubaiying.github.io.git" # you code repository
+github_repo: "https://github.com/financialfly/financialfly.github.io.git" # you code repository
 
 # Sidebar settings
 sidebar: true                           # whether or not using Sidebar.
@@ -57,16 +57,16 @@ kramdown:
 
 # 评论系统
 # Disqus（https://disqus.com/）
-disqus_username: financialfly
+#disqus_username: fly
 
 # Gitalk
 gitalk:
   enable: true    #是否开启Gitalk评论
-  clientID: f2c84e7629bb1446c1a4                            #生成的clientID
-  clientSecret: ca6d6139d1e1b8c43f8b2e19492ddcac8b322d0d    #生成的clientSecret
-  repo: qiubaiying.github.io    #仓库名称
-  owner: qiubaiying    #github用户名
-  admin: qiubaiying
+  clientID: ff3b34f545e0df1dfbdb                            #生成的clientID
+  clientSecret: 0edee16c5a98abb7e79346af597c17c70e007629    #生成的clientSecret
+  repo: financialfly.github.io    #仓库名称
+  owner: financialfly    #github用户名
+  admin: financialfly
   distractionFreeMode: true #是否启用类似FB的阴影遮罩
 
 
@@ -99,14 +99,11 @@ service-worker: true
 # Friends
 friends: [
     {
-        title: "WY",
-        href: "http://zhengwuyang.com"
+        title: "简书·withfinancial",
+        href: "https://www.jianshu.com/u/c1e2320b58c7"
     },{
-        title: "简书·BY",
-        href: "http://www.jianshu.com/u/e71990ada2fd"
-    },{
-        title: "Apple",
-        href: "https://apple.com"
+        title: "Python",
+        href: "https://www.python.org/"
     },{
         title: "Apple Developer",
         href: "https://developer.apple.com/"
