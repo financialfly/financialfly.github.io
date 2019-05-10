@@ -24,8 +24,8 @@ MYSQL_PWD = 'root' # 密码
 MYSQL_DATABASE = 'test' # 数据库名称
 ```
 
-#### 定义构造方法和`from_setttings`方法
-接下来在pipeline中定义构造方法来绑定连接池，并定义`from_setttings`方法用来读取数据库配置：
+#### 定义构造方法和`from_settings`方法
+接下来在pipeline中定义构造方法来绑定连接池，并定义`from_settings`方法用来读取数据库配置：
 ```py
 import logging
 from twisted.enterprise import adbapi
