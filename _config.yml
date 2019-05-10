@@ -1,10 +1,10 @@
 # Site settings
 title: Fly
 SEOTitle: financial's blog
-header-img: img/home-bg-road.jpg
+header-img: img/home-bg-sunset.jpg
 email: financialfly@qq.com
 description: "Every failure is leading towards success."
-keyword: "Fly, financial, iOS, Apple, iPhone"
+keyword: "Fly, financial, iOS, Apple, iPhone, Python"
 url: "http://financialfly.github.io"          # your host, for absolute URL
 baseurl: ""      # for example, '/blog' if your blog hosted on 'host/blog'
 github_repo: "https://github.com/financialfly/financialfly.github.io.git" # you code repository
