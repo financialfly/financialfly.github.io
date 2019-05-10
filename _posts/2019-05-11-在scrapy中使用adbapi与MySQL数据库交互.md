@@ -93,6 +93,12 @@ class TestPipeline(object):
         except Exception as e:
             logger.error('Save error. reason: %s, query: %s, item: %s' % (e, query, item))
 ```
+最后别忘了关闭连接池：
+```py
+    def close_spider(self, spider):
+            self.dbpool.close()
+            spider.logger.info('db pool is closed')
+```
 
 #### 参考
 1.[官方接口文档](https://twistedmatrix.com/documents/18.7.0/api/twisted.enterprise.adbapi.ConnectionPool.html#runQuery)            
