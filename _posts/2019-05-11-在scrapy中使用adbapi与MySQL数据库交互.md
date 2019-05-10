@@ -86,7 +86,7 @@ class TestPipeline(object):
         # 它会自动提交
         keys = '{}'.format(tuple(k for k, v in item.items() if v))
         values = tuple(v for v in item.values() if v)
-        query = 'INSERT INTO {} {} VALUES {}'.format(table, keys, values)
+        query = 'INSERT INTO {} {} VALUES {}'.format(self.table, keys, values)
         try:
             tx.execute(query)
             logger.info('Item saved.')
