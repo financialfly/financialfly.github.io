@@ -96,8 +96,8 @@ class TestPipeline(object):
 最后别忘了关闭连接池：
 ```py
     def close_spider(self, spider):
-            self.dbpool.close()
-            spider.logger.info('db pool is closed')
+        self.dbpool.close()
+        spider.logger.info('db pool is closed')
 ```
 
 #### 参考
