@@ -210,3 +210,5 @@ https://github.com/financialfly/async-request 200
 {'hello': 'github'}
 DEBUG:Crawler:crawler stopped
 ```
+
+源码直达：[financialfly/async-request: 基于asyncio和requests做的轻量级异步网络请求工具](https://github.com/financialfly/async-request)
