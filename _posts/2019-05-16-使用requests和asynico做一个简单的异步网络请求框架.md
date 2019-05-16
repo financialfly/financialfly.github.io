@@ -138,22 +138,10 @@ class Crawler(object):
                 self.requests.append(x)
             elif self.result_callback:
                 self.result_callback(x)
-
-    def run(self):
-        # 如果requests列表中还有Request实例，则继续请求
-        while self.requests:
-            tasks = [self.get_html(req) for req in self.requests]
-            # 重置为空列表
-            self.requests = list()
-            self.loop.run_until_complete(asyncio.gather(*tasks))
-
-    def stop(self):
-        self.loop.close()
-        logging.debug('crawler stopped')
 ```
-最后定义一个启动`event_loop`函数和关闭`event_loop`函数：
+最后定义下启动`event_loop`和关闭`event_loop`方法：
 ```py
-	def run(self):
+    def run(self):
         # 如果requests列表中还有Request实例，则继续请求
         while self.requests:
             tasks = [self.get_html(req) for req in self.requests]
