@@ -82,7 +82,7 @@ import types
 from functools import partial
 from .request import Request
 
-logging.basicConfig(level='DEBUG')
+logger = logging.getLogger('async_request.Crawler')
 
 class Crawler(object):
 
@@ -97,7 +97,7 @@ class Crawler(object):
         self.result_callback = result_callback
 
     async def get_html(self, request):
-        logging.debug('Crawling {}'.format(request.url))
+        logger.debug('Crawling {}'.format(request.url))
         # 传入参数等待执行
         future = self.loop.run_in_executor(None,
                                            partial(requests.request,
@@ -116,20 +116,25 @@ class Crawler(object):
                 r = await future
                 break
             except Exception as e:
-                logging.info('Error happen when crawling %s' % request.url)
-                logging.error(e)
+                logger.info('Error happen when crawling %s' % request.url)
+                logger.error(e)
                 request.retry_times -= 1
-                logging.info('Retrying %s' % request.url)
+                logger.info('Retrying %s' % request.url)
         else:
-            logging.info('Gave up retry %s, total retry %d times' % (request.url, request.retry_times + 1))
+            logger.info('Gave up retry %s, total retry %d times' % (request.url, request.retry_times + 1))
             # 重试都失败了则放弃，并返回一个空的Response对象，设置状态码为404
             r = requests.Response()
             r.status_code, r.url = 404, request.url
 
-        logging.debug('[%d] Scraped from %s' % (r.status_code, r.url))
+        logger.debug('[%d] Scraped from %s' % (r.status_code, r.url))
         # 传递meta
         r.meta = request.meta
-        results = request.callback(r)
+        # 不要让错误停止程序
+        try:
+            results = request.callback(r)
+        except Exception as e:
+            logger.error(e)
+            return
         if not isinstance(results, types.GeneratorType):
             return
         # 检测结果，如果是Request，则添加到requests列表中准备继续请求，否则执行结果回调函数
@@ -139,9 +144,9 @@ class Crawler(object):
             elif self.result_callback:
                 self.result_callback(x)
 ```
-最后定义下启动`event_loop`和关闭`event_loop`方法：
+最后定义下启动和关闭`event_loop`的方法：
 ```py
-    def run(self):
+    def _run(self):
         # 如果requests列表中还有Request实例，则继续请求
         while self.requests:
             tasks = [self.get_html(req) for req in self.requests]
@@ -151,9 +156,54 @@ class Crawler(object):
 
     def stop(self):
         self.loop.close()
-        self.logger.debug('crawler stopped')
+        logging.debug('crawler stopped')
+
+    def run(self):
+        '''保证event_llop被正常关闭'''
+        try:
+            self._run()
+        finally:
+            self.stop()
 ```
 
+##### 更新一个`xpath`解析
+`xpath`是数据采集中常用到的解析规则，作为一个轻量级框架，虽然功能不能做太多，但是封装一个`xpath`功能还是可以的，下面就着手定义一个`XpathSelector`吧，为了顺手，方法名字就参照`scrapy`来了：
+```py
+from lxml import etree
+
+class XpathSelector(object):
+
+    def __init__(self, raw_text=None):
+        self.html = None
+        self._text = raw_text
+
+    def get(self):
+        '''获取一个结果'''
+        try:
+            return self.html.xpath(self.syntax)[0]
+        except IndexError:
+            return None
+
+    def getall(self):
+        '''获取所有结果'''
+        return self.html.xpath(self.syntax)
+
+    def __call__(self, syntax):
+        '''只有传入解析规则的时候才解析网页，减少性能消耗'''
+        self.syntax = syntax
+        if not self.html:
+            self.html = etree.HTML((self._text))
+        return self
+```
+如果你愿意，可以在请求完成后将`XpathSelector`作为属性赋值给`response`，那么就可以在回调方法中直接使用`response.xpath('...').get()`这样的方法了，但是请注意这样会稍微影响性能。具体操作可以在`Crawler`类的`get_html`方法中更新如下代码：
+```py
+        ...
+        # 传递meta
+        r.meta = request.meta
+        # 创建XpathSelecto实例并绑定给response
+        r.xpath = XpathSelector(raw_text=r.text)
+        ...
+```
 OK，到此这个简单的框架也就做完了，简单使用一下：
 ```py
 from async_request import Request, Crawler
@@ -175,28 +225,13 @@ def process_result(result):
 
 c = Crawler([Request(url='https://www.baidu.com', callback=parse_baidu)], result_callback=process_result)
 c.run()
-c.stop()
 ```
 结果正如预期：
 ```
-DEBUG:asyncio:Using selector: SelectSelector
-DEBUG:Crawler:Crawling https://www.baidu.com
-DEBUG:requests.packages.urllib3.connectionpool:Starting new HTTPS connection (1): www.baidu.com
-DEBUG:requests.packages.urllib3.connectionpool:https://www.baidu.com:443 "GET / HTTP/1.1" 200 None
 https://www.baidu.com/ 200
-DEBUG:Crawler:[200] Scraped from https://www.baidu.com/
-DEBUG:Crawler:Crawling https://cn.bing.com/
-DEBUG:requests.packages.urllib3.connectionpool:Starting new HTTPS connection (1): cn.bing.com
-DEBUG:requests.packages.urllib3.connectionpool:https://cn.bing.com:443 "GET / HTTP/1.1" 200 46546
 https://cn.bing.com/ 200
-DEBUG:Crawler:[200] Scraped from https://cn.bing.com/
-DEBUG:Crawler:Crawling https://github.com/financialfly/async-request
-DEBUG:requests.packages.urllib3.connectionpool:Starting new HTTPS connection (1): github.com
-DEBUG:requests.packages.urllib3.connectionpool:https://github.com:443 "GET /financialfly/async-request HTTP/1.1" 200 None
-DEBUG:Crawler:[200] Scraped from https://github.com/financialfly/async-request
 https://github.com/financialfly/async-request 200
 {'hello': 'github'}
-DEBUG:Crawler:crawler stopped
 ```
 
 源码直达：[financialfly/async-request: 基于asyncio和requests做的轻量级异步网络请求工具](https://github.com/financialfly/async-request)
