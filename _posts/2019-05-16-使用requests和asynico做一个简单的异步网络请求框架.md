@@ -10,7 +10,7 @@ tags:
     - python
 ---
 
-当面对小型的数据采集任务时，采用诸如scrapy等框架会觉得臃肿，而使用requests这样的阻塞型请求库又会觉得太耗时。所以自定义一个小巧而实用网络请求工具就很有必要了——它可以随时调用，速度也还行，并且代码也不多。         
+当面对小型的数据采集任务时，采用诸如`scrapy`等框架会觉得臃肿，而使用`requests`这样的阻塞型请求库又会觉得太耗时。所以自定义一个小巧而实用网络请求工具就很有必要了——它可以随时调用，速度也还行，并且代码也不多。         
 
 整体设计分为两部分：一个是`Request`类，它包含要请求的地址、请求头、重试次数、超时、回调函数等等(基本上就是参照scrapy的Reuqest类)；另一个就是`Crawler`类，它接收一个或多个`Request`实例，负责运行它们并在成功后自动执行回调函数。      
 具体步骤如下：
@@ -36,23 +36,28 @@ USER_AGENTS = [
 
 class Request(object):
 
-    def __init__(self, url, headers=None, retry_times=3,
+    def __init__(self, url, params=None, headers=None, retry_times=3,
                  timeout=5, callback=None, meta=None,
-                 cookies=None, proxies=None, data=None, json=None, method='GET'):
+                 cookies=None, proxies=None, method='GET', **kwargs):
         '''
-        因为是基于requests的，所以这些参数都是直接作为关键字参数传递给requests.request方法
+        初始化
         '''
         self.url = url
         self._headers = headers
         self.retry_times = retry_times
-        self.timeout = timeout
         self.callback = callback
         self.meta = meta or dict()
-        self.cookies = cookies
-        self.proxies = proxies
-        self.data = data
-        self.json = json
-        self.method = method
+        # 因为是基于requests的，所以这些参数都是直接作为关键字参数传递给requests.request方法
+        self.params = dict(
+            url=url,
+            params=params,
+            headers=self.headers,
+            method=method,
+            timeout=timeout,
+            cookies=cookies,
+            proxies=proxies,
+            **kwargs
+        )
 
     @property
     def headers(self):
@@ -67,8 +72,18 @@ class Request(object):
     
 class FormRquest(Request):
     
-    def __init__(self, url, method='POST', *args, **kwargs):
-        super().__init__(url=url, method=method, *args, **kwargs)
+    def __init__(self, url, data=None, json=None, method='POST',
+             callback=None, meta=None, retry_times=3, headers=None, **kwargs):
+        super().__init__(url=url, method=method, callback=callback,
+                         meta=meta, retry_times=retry_times, headers=headers, **kwargs)
+        self.params = dict(
+            url=url,
+            method=method,
+            headers=self.headers,
+            data=data,
+            json=json,
+            **kwargs
+        )
 ```
 这样一个简单的`Request`对象就定义好了，接下来开始定义`Crawler`类。
 
@@ -86,7 +101,7 @@ logger = logging.getLogger('async_request.Crawler')
 
 class Crawler(object):
 
-    def __init__(self, requests, result_callback=None):
+    def __init__(self, requests, result_callback=None, logger=None):
         '''
         初始化crawler
         :param requests: Request请求列表
@@ -98,22 +113,12 @@ class Crawler(object):
 
     async def get_html(self, request):
         logger.debug('Crawling {}'.format(request.url))
-        # 传入参数等待执行
-        future = self.loop.run_in_executor(None,
-                                           partial(requests.request,
-                                                   method=request.method,
-                                                   url=request.url,
-                                                   headers=request.headers,
-                                                   timeout=request.timeout,
-                                                   cookies=request.cookies,
-                                                   proxies=request.proxies,
-                                                   data=request.data,
-                                                   json=request.json
-                                                   ))
+        # 使用偏函数传递request参数
+        future = self.loop.run_in_executor(None, partial(requests.request, **request.params))
         # 开始请求，如果失败则重试，并将重试次数减1
         while request.retry_times >= 0:
             try:
-                r = await future
+                response = await future
                 break
             except Exception as e:
                 logger.info('Error happen when crawling %s' % request.url)
@@ -123,18 +128,19 @@ class Crawler(object):
         else:
             logger.info('Gave up retry %s, total retry %d times' % (request.url, request.retry_times + 1))
             # 重试都失败了则放弃，并返回一个空的Response对象，设置状态码为404
-            r = requests.Response()
-            r.status_code, r.url = 404, request.url
+            response = requests.Response()
+            response.status_code, response.url = 404, request.url
 
-        logger.debug('[%d] Scraped from %s' % (r.status_code, r.url))
+        logger.debug('[%d] Scraped from %s' % (response.status_code, response.url))
         # 传递meta
-        r.meta = request.meta
-        # 不要让错误停止程序
+        response.meta = request.meta
+        # 执行回调
         try:
-            results = request.callback(r)
+            results = request.callback(response)
         except Exception as e:
             logger.error(e)
             return
+        # 如果不可迭代则返回
         if not isinstance(results, types.GeneratorType):
             return
         # 检测结果，如果是Request，则添加到requests列表中准备继续请求，否则执行结果回调函数
@@ -143,31 +149,40 @@ class Crawler(object):
                 self.requests.append(x)
             elif self.result_callback:
                 self.result_callback(x)
-```
-最后定义下启动和关闭`event_loop`的方法：
-```py
-    def _run(self):
-        # 如果requests列表中还有Request实例，则继续请求
-        while self.requests:
-            tasks = [self.get_html(req) for req in self.requests]
-            # 重置为空列表
-            self.requests = list()
-            self.loop.run_until_complete(asyncio.gather(*tasks))
 
-    def stop(self):
-        self.loop.close()
-        logging.debug('crawler stopped')
-
-    def run(self):
-        '''保证event_llop被正常关闭'''
+    def run(self, close_eventloop=True):
+        '''启动函数'''
         try:
-            self._run()
+            # 如果requests列表中还有Request实例，则继续请求
+            while self.requests:
+                tasks = [self.get_html(req) for req in self.requests]
+                # 清空请求列表
+                self.requests.clear()
+                self.loop.run_until_complete(asyncio.gather(*tasks))
         finally:
-            self.stop()
+            if close_eventloop:
+                self.loop.close()
+                logger.debug('crawler stopped')
+```
+最后定义下启动`event_loop`的方法：
+```py
+    def run(self, close_eventloop=True):
+        '''启动函数'''
+        try:
+            # 如果requests列表中还有Request实例，则继续请求
+            while self.requests:
+                tasks = [self.get_html(req) for req in self.requests]
+                # 清空请求列表
+                self.requests.clear()
+                self.loop.run_until_complete(asyncio.gather(*tasks))
+        finally:
+            if close_eventloop:
+                self.loop.close()
+                logger.debug('crawler stopped')
 ```
 
 ##### 更新一个`xpath`解析
-`xpath`是数据采集中常用到的解析规则，作为一个轻量级框架，虽然功能不能做太多，但是封装一个`xpath`功能还是可以的，下面就着手定义一个`XpathSelector`吧，为了顺手，方法名字就参照`scrapy`来了：
+`xpath`是数据采集中常用到的解析规则，作为一个轻量级框架，虽然功能不能做太多，但是封装一个`xpath`功能还是可以的，下面就基于`lxml`着手定义一个极简的`XpathSelector`吧，为了顺手，方法名字就参照`scrapy`来了：
 ```py
 from lxml import etree
 
@@ -191,8 +206,8 @@ class XpathSelector(object):
     def __call__(self, syntax):
         '''只有传入解析规则的时候才解析网页，减少性能消耗'''
         self.syntax = syntax
-        if not self.html:
-            self.html = etree.HTML((self._text))
+        if self.html is None::
+            self.html = etree.HTML(self._text)
         return self
 ```
 如果你愿意，可以在请求完成后将`XpathSelector`作为属性赋值给`response`，那么就可以在回调方法中直接使用`response.xpath('...').get()`这样的方法了，但是请注意这样会稍微影响性能。具体操作可以在`Crawler`类的`get_html`方法中更新如下代码：
