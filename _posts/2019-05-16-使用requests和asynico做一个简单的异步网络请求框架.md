@@ -181,7 +181,7 @@ class Crawler(object):
                 logger.debug('crawler stopped')
 ```
 
-##### 更新一个`xpath`解析
+##### 更新`xpath`解析
 `xpath`是数据采集中常用到的解析规则，作为一个轻量级框架，虽然功能不能做太多，但是封装一个`xpath`功能还是可以的，下面就基于`lxml`着手定义一个极简的`XpathSelector`吧，为了顺手，方法名字就参照`scrapy`来了：
 ```py
 from lxml import etree
@@ -219,17 +219,25 @@ class XpathSelector(object):
         r.xpath = XpathSelector(raw_text=r.text)
         ...
 ```
-OK，到此这个简单的框架也就做完了，简单使用一下：
+OK，到此这个简单的框架也就做完了，最后再来封装一个启动函数，它接收一个`Request`请求列表，用来创建`Crawler`实例并运行`run`方法：
 ```py
-from async_request import Request, Crawler
+def crawl(requests, result_callback=None, close_eventloop=True):
+    c = Crawler(requests=requests, result_callback=result_callback)
+    c.run(close_eventloop=close_eventloop)
+```
+##### 测试
+最后简单使用一下：
+```py
+import async_request as ar
 
 def parse_baidu(response):
     print(response.url, response.status_code)
-    yield Request('https://cn.bing.com/', callback=parse_bing)
+    yield ar.Request('https://cn.bing.com/', callback=parse_bing)
 
 def parse_bing(response):
     print(response.url, response.status_code)
-    yield Request('https://github.com/financialfly/async-request', callback=parse_github)
+    print(response.xpath('//a/@href').get())
+    yield ar.Request('https://github.com/financialfly/async-request', callback=parse_github)
 
 def parse_github(response):
     print(response.url, response.status_code)
@@ -238,13 +246,14 @@ def parse_github(response):
 def process_result(result):
     print(result)
 
-c = Crawler([Request(url='https://www.baidu.com', callback=parse_baidu)], result_callback=process_result)
-c.run()
+request_list = [ar.Request(url='https://www.baidu.com', callback=parse_baidu)]
+ar.crawl(request_list, result_callback=process_result)
 ```
 结果正如预期：
 ```
 https://www.baidu.com/ 200
 https://cn.bing.com/ 200
+javascript:void(0)
 https://github.com/financialfly/async-request 200
 {'hello': 'github'}
 ```
